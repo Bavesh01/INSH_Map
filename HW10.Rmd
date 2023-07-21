@@ -1,0 +1,104 @@
+---
+title: "HW10"
+author: "Bavesh M"
+date: "4/20/2022"
+output: html_document
+---
+## Assignment Summary
+For Homework 3, I made a map of massachusetts using ggplot2 and I have added the important highways from mass.gov. On the same map I have also added the locations of hospitals that serve acute care for emergencies. What I wanted to show from the map is that there are locations that are far from hospitals which might make crashing in those areas a major risk. Here is the map from HW3 that summarizes my result.
+
+![](HW10.jpg){#id .class width=80% height=80%}
+
+
+## Extension
+After learning about buffers and overlays, I felt like it would be more insightful to show the actual roads that are at risk, which can easily be achieved by using overlays and buffers. I would be taking the geometric difference of the hosppital buffer regions and subtract it from the roads to get the desired result. I also thought of making a leaflet map instead of ggplot2 as it is more immersive.
+
+## Rationale
+It is shown that risk of death increases per kilometer that you are away from a hospital (Source: National Library of Medicine), especially for people with respiratory problems. Therefore it is absolutely essential to have the authorities to make our people safe by building more emergency centers, especially in places far away from the population dense areas.
+
+
+#### setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+setwd("C:/Users/baves/Documents/INSH2102/HW10")
+
+
+# import libraries
+library(sf)
+library(ggplot2)
+library(tmap)
+library("tm")
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(spdep)
+library(gstat)
+library(raster)
+library(st)
+library(igraph)
+library(PROJ)
+tmap_mode("view")
+```
+
+#### data
+```{r}
+
+ma_mapdf <- st_read("COUNTIESSURVEY_POLYM.shp")
+hosp_spdf <- st_read("HOSPITALS_PT.shp")
+roads_spdf <- st_read("EOTMAJROADS_RTE_MAJOR.shp")
+st_is_valid(roads_spdf)
+```
+
+
+#### initial map
+```{r}
+tm_shape(ma_mapdf) + tm_borders() + tm_text("COUNTY", size = 0.7, bg.color = "white", bg.alpha = 1) + 
+  tm_shape(roads_spdf) + tm_lines(col = "darkblue") + tm_shape(hosp_spdf)  + tm_dots(col = "red", size=0.05) 
+```
+
+
+## Making Buffers
+I reworked with buffer sizes for the hospitals, to get the zones that are at the biggest risk. Since the size is related in meters, I made the buffer to be of 5km in length. The red circles shown here is the region 5 miles around the health center.
+```{r}
+# made a hospital buffer
+hospBuffer<- st_buffer(hosp_spdf, 8046) 
+tm_shape(ma_mapdf) + tm_borders() + tm_text("COUNTY", size = 0.7, bg.color = "white", bg.alpha = 1) + 
+  tm_shape(roads_spdf) + tm_lines(col = "darkblue") + tm_shape(hospBuffer) + tm_fill(col = "red", alpha = 0.4) 
+```
+
+Here, I made a st_difference to show roads that are farther than 5 miles away from an acute health center. Orange lines below highlight that.
+
+```{r}
+# combining all hospital areas to make it more efficient
+hospCombine <- st_union(hospBuffer)
+Difference5 <- st_difference(roads_spdf, hospCombine)
+tm_shape(ma_mapdf) + tm_borders() + tm_text("COUNTY", size = 0.7, bg.color = "white", bg.alpha = 1) + 
+   tm_shape(Difference5) + tm_lines(col = "orange")
+```
+
+
+## Combining everything
+I will be adding zones that are 10 miles farther than the hospital sites as well and make a map with roads and their proximity in order to build a more cohesive and immersive map.
+
+```{r}
+# making a new buffer for 10 miles and combining that
+hospBuffer10 <- st_buffer(hosp_spdf, 16092) 
+hospCombine10 <- st_union(hospBuffer10)
+Difference10 <- st_difference(roads_spdf, hospCombine10)
+```
+
+
+```{r}
+
+tm_shape(ma_mapdf) + tm_borders() + tm_text("COUNTY", size = 0.7, bg.color = "white", bg.alpha = 1) + 
+  tm_shape(roads_spdf) + tm_lines(col = "darkgreen") + 
+   tm_shape(Difference5) + tm_lines(col = "orange")  + tm_shape(Difference10) + tm_lines(col = "maroon") + tm_add_legend(col = c("darkgreen","orange","maroon"),labels = c("Within 5 miles", "Between 5-10 mi", "Beyond 10 miles"), title= "Major highways and their distance from acute health centers")
+```
+
+
+As you can see, there are regions with a high concentration of maroon roads, especially in Barnstable and Berkshire counties, which needs some attention in terms of building more health centers. However, this analysis doesn't account the density of traffic and probability of car crashes, which could help building better analyses.
+
+Source: mass.gov
+
+
